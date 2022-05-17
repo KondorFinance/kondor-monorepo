@@ -1,3 +1,23 @@
 {
-  "packageManager": "yarn@3.2.1"
+  "name": "@koifi/monorepo",
+  "private": true,
+  "description": "KoiFi Monorepo",
+  "license": "GPL-3.0-only",
+  "homepage": "https://github.com/KoiFi-labs/koifi-monorepo#readme",
+  "repository": "git@github.com:KoiFi-labs/koifi-monorepo.git",
+  "packageManager": "yarn@3.2.1",
+  "contributors": [
+    "Luis <luis@koifi.com>",
+    "Chris <KryptoKris@koifi.com>",
+    "Daniel <daniel@koifi.com>"
+  ],
+  "scripts": {
+    "build": "yarn workspaces foreach --parallel --verbose  run build",
+    "lint": "yarn workspaces foreach --parallel --verbose run lint",
+    "test": "yarn workspaces foreach --parallel --verbose run test"
+  },
+  "workspaces": [
+    "pkg/*",
+    "pvt/*"
+  ]
 }
