@@ -17,14 +17,14 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
     ],\
     "dependencyTreeRoots": [\
       {\
-        "name": "root-workspace-0b6124",\
+        "name": "@koifi/monorepo",\
         "reference": "workspace:."\
       }\
     ],\
     "enableTopLevelFallback": true,\
     "ignorePatternData": "(^(?:\\\\.yarn\\\\/sdks(?:\\\\/(?!\\\\.{1,2}(?:\\\\/|$))(?:(?:(?!(?:^|\\\\/)\\\\.{1,2}(?:\\\\/|$)).)*?)|$))$)",\
     "fallbackExclusionList": [\
-      ["root-workspace-0b6124", ["workspace:."]]\
+      ["@koifi/monorepo", ["workspace:."]]\
     ],\
     "fallbackPool": [\
     ],\
@@ -37,11 +37,11 @@ function $$SETUP_STATE(hydrateRuntimeState, basePath) {
           "linkType": "SOFT"\
         }]\
       ]],\
-      ["root-workspace-0b6124", [\
+      ["@koifi/monorepo", [\
         ["workspace:.", {\
           "packageLocation": "./",\
           "packageDependencies": [\
-            ["root-workspace-0b6124", "workspace:."]\
+            ["@koifi/monorepo", "workspace:."]\
           ],\
           "linkType": "SOFT"\
         }]\

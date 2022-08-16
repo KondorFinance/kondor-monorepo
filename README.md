@@ -5,9 +5,13 @@
 [![Docs](https://img.shields.io/badge/docs-%F0%9F%93%84-blue)](https://docs.koifi.com/)
 [![License](https://img.shields.io/badge/License-GPLv3-green.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-This repository contains the KoiFi Protocol core smart contracts, including the `Vault` and standard Pools, along with their tests, configuration, and deployment information.
+This repository will contain the KoiFi Protocol core smart contracts, along with their tests, configuration, and deployment information.
 
 <!-- For a high-level introduction to KoiFi, see [Introducing KoiFi: Generalized AMMs]. -->
+
+## dApp architecture
+
+The dApp architecture design is currently under development, diagrams and information may be not final.
 
 ## Structure
 
@@ -18,7 +22,7 @@ Active development occurs in this repository, which means some contracts in it m
 ### Packages
 
 - [`deployments`](./pkg/deployments): addresses and ABIs of all KoiFi deployed contracts, for mainnet and testnet.
-- [`vault`](./pkg/vault): the [`Vault`](./pkg/vault/contracts/Vault.teal) contract and all core interfaces, including [`IVault`](./pkg/vault/contracts/interfaces/IVault.teal) and the Pool interfaces: [`IBasePool`](./pkg/vault/contracts/interfaces/IBasePool.teal), [`IGeneralPool`](./pkg/vault/contracts/interfaces/IGeneralPool.sol) and [`IMinimalSwapInfoPool`](./pkg/vault/contracts/interfaces/IMinimalSwapInfoPool.teal).
+<!-- - [`vault`](./pkg/vault): the [`Vault`](./pkg/vault/contracts/Vault.teal) contract and all core interfaces, including [`IVault`](./pkg/vault/contracts/interfaces/IVault.teal) and the Pool interfaces: [`IBasePool`](./pkg/vault/contracts/interfaces/IBasePool.teal), [`IGeneralPool`](./pkg/vault/contracts/interfaces/IGeneralPool.sol) and [`IMinimalSwapInfoPool`](./pkg/vault/contracts/interfaces/IMinimalSwapInfoPool.teal). -->
 - [`pool-weighted`](./pkg/pool-weighted): the [`WeightedPool`](./pkg/pool-weighted/contracts/WeightedPool.teal) and [`WeightedPool2Tokens`](./pkg/pool-weighted/contracts/WeightedPool2Tokens.teal) contracts, along with their associated factories.
 <!-- - [`pool-utils`](./pkg/pool-utils): Solidity utilities used to develop Pool contracts.
 - [`solidity-utils`](./pkg/solidity-utils): miscellaneous Solidity helpers and utilities used in many different contracts.
