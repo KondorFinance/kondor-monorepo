@@ -1,0 +1,191 @@
+#pragma version 5
+txn ApplicationID
+int 0
+==
+bnz main_l14
+txn OnCompletion
+int DeleteApplication
+==
+bnz main_l13
+txn OnCompletion
+int UpdateApplication
+==
+bnz main_l12
+txn OnCompletion
+int OptIn
+==
+bnz main_l9
+txn OnCompletion
+int CloseOut
+==
+bnz main_l8
+txn OnCompletion
+int NoOp
+==
+bnz main_l7
+err
+main_l7:
+int 0
+return
+main_l8:
+int 0
+return
+main_l9:
+txna ApplicationArgs 0
+byte "bootstrap"
+==
+bnz main_l11
+err
+main_l11:
+txna ApplicationArgs 0
+byte "bootstrap"
+==
+assert
+global GroupSize
+int 6
+==
+assert
+txn NumAppArgs
+int 4
+==
+assert
+callsub sub1
+assert
+callsub sub0
+assert
+callsub sub4
+assert
+int 3
+txna ApplicationArgs 1
+callsub sub3
+assert
+int 4
+txna ApplicationArgs 2
+callsub sub3
+assert
+int 5
+txna ApplicationArgs 3
+callsub sub3
+assert
+int 1
+return
+main_l12:
+int 0
+return
+main_l13:
+int 0
+return
+main_l14:
+int 1
+return
+sub0: // duplicated_asset
+txna ApplicationArgs 1
+txna ApplicationArgs 2
+!=
+txna ApplicationArgs 1
+txna ApplicationArgs 3
+!=
+&&
+txna ApplicationArgs 2
+txna ApplicationArgs 3
+!=
+&&
+retsub
+sub1: // fees
+gtxn 0 Fee
+int 1000
+>=
+gtxn 0 Amount
+int 3000
+>=
+&&
+gtxn 0 Sender
+txn Sender
+==
+&&
+gtxn 0 Receiver
+txn Sender
+==
+&&
+retsub
+sub2: // snd_rcv
+store 2
+load 2
+gtxns Sender
+txn Sender
+==
+load 2
+gtxns Receiver
+txn Sender
+==
+&&
+retsub
+sub3: // optin_asset
+store 1
+store 0
+load 0
+gtxns TypeEnum
+int axfer
+==
+load 0
+gtxns Amount
+int 0
+==
+&&
+load 0
+gtxns XferAsset
+load 1
+==
+&&
+load 0
+callsub sub2
+&&
+retsub
+sub4: // lp_asset
+gtxn 2 TypeEnum
+int acfg
+==
+gtxn 2 ConfigAsset
+int 0
+==
+&&
+gtxn 2 ConfigAssetTotal
+int 18446744073709551615
+==
+&&
+gtxn 2 ConfigAssetDecimals
+int 6
+==
+&&
+gtxn 2 ConfigAssetDefaultFrozen
+int 0
+==
+&&
+gtxn 2 ConfigAssetUnitName
+byte "koifi1.0"
+==
+&&
+gtxn 2 ConfigAssetName
+int 0
+int 6
+substring3
+byte "koifi-"
+==
+&&
+gtxn 2 ConfigAssetManager
+global ZeroAddress
+==
+&&
+gtxn 2 ConfigAssetReserve
+global ZeroAddress
+==
+&&
+gtxn 2 ConfigAssetFreeze
+global ZeroAddress
+==
+&&
+gtxn 2 ConfigAssetClawback
+global ZeroAddress
+==
+&&
+retsub
