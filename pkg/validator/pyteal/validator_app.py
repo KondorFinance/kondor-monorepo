@@ -13,12 +13,17 @@ def approval():
 #   symbol_2 = AssetParam.unitName(asset_2)
 #   symbol_3 = AssetParam.unitName(asset_3)
 
-  FEE = 1000
+  FEE = Int(1000)
   POOL_NAME = "koifi-"
   UNIT_NAME = "koifi1.0"
   total_supply = 18446744073709551615
   decimals = 6
-#   name = concat(Bytes(POOL_NAME), Bytes("-"), Bytes(symbol_1), Bytes(symbol_2), Bytes(symbol_3)) 
+#   name = concat(Bytes(POOL_NAME), Bytes(symbol_1), Bytes(symbol_2), Bytes(symbol_3)) 
+  REDEEM_DISTRIBUTOR_APP_ID = Int(123)
+
+# TODO: add subroutine to verify application ID and txn type app call
+# TODO: verify if sender is not pooler, fees not charged, verify receiver
+
 
   @Subroutine(TealType.uint64)
   def duplicated_asset():
@@ -29,11 +34,11 @@ def approval():
     )
 
   @Subroutine(TealType.uint64)
-  def fees():
+  def fees(txn_length):
     return And(
-      Gtxn[0].fee() >= Int(FEE),
-      Gtxn[0].amount() >= Int(FEE*3),
-      Gtxn[0].sender() == Txn.sender(),
+      Gtxn[0].fee() >= FEE,
+      Gtxn[0].amount() >= FEE*txn_length,
+      Gtxn[0].sender() != Txn.sender(),
       Gtxn[0].receiver() == Txn.sender(),
     )
 
@@ -76,6 +81,20 @@ def approval():
       Gtxn[2].config_asset_clawback() == Global.zero_address(),
     )
 
+  # Calculates the total fee amount in the gtxn
+  # TODO: verify when pooler is not the sender
+  @Subroutine(TealType.uint64)
+  def sum_fees():
+    totalFees = ScratchVar(TealType.uint64)
+    i = ScratchVar(TealType.uint64)
+
+    Seq([
+        totalFees.store(Int(0)),
+        For(i.store(Int(0)), i.load() < Global.group_size(), i.store(i.load() + Int(1))).Do(
+            totalFees.store(totalFees.load() + Gtxn[i.load()].fee())
+        )
+    ])
+
   # TODO: where and when should it be used?
   @Subroutine(TealType.uint64)
   def safety_conds():
@@ -85,13 +104,27 @@ def approval():
         Txn.rekey_to() == Global.zero_address(),
     )
 
+  # app call to distributor contract
+  @Subroutine(TealType.none)
+  def redeem_distributor(app_id, args):
+    return Seq(
+        InnerTxnBuilder.Begin(),
+        InnerTxnBuilder.SetFields({
+            TxnField.type_enum: TxnType.ApplicationCall,
+            TxnField.application_id: Int(app_id),
+            TxnField.on_complete: OnComplete.NoOp,
+            TxnField.application_args: args,
+        }),
+        InnerTxnBuilder.Submit()
+    )
+
+
   bootstrap = Seq(
     Assert(Txn.application_args[0] == Bytes("bootstrap")),
-    Assert(Global.group_size() == Int(6)), # TODO: verify this
+    Assert(Global.group_size() == Int(6)),
     Assert(Txn.application_args.length() == Int(4)),
-    Assert(fees()),
+    Assert(fees(Int(6))),
     Assert(duplicated_asset()),
-    # Assert(asset_1 == Gtxn[3].assets),
     Assert(lp_asset()),
     Assert(optin_asset(Int(3), asset_1)),
     Assert(optin_asset(Int(4), asset_2)),
@@ -100,12 +133,28 @@ def approval():
     Approve(),
   )
 
+  redeem = Seq(
+    Assert(Txn.application_args[0] == Bytes("redeem")),
+    Assert(Global.group_size() == Int(3)),
+    Assert(Txn.application_args.length() == Int(4)),
+    Assert(Txn.type_enum() == TxnType.ApplicationCall),
+    Assert(fees(Int(3))),
+    Assert(Gtxn[1].accounts[0] != Txn.sender()),
+    Assert(Txn.on_completion() == OnComplete.NoOp),
+    Assert(Gtxn[4].sender() == Txn.sender()), # pool to pooler
+    Assert(Gtxn[4].asset_receiver() == Gtxn[2].sender()),
+    # Assert(safety_conds()),
+    redeem_distributor(REDEEM_DISTRIBUTOR_APP_ID, Txn.application_args),
+    Approve(),
+  )
 
   return program.event(
     init=Approve(),
     opt_in=Cond(
       [Txn.application_args[0] == Bytes("bootstrap"), bootstrap],
+      [Txn.application_args[0] == Bytes("redeem"), redeem],
     )
   )
 def clear():
   return Approve()
+
