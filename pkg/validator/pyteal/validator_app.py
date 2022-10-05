@@ -106,14 +106,14 @@ def approval():
 
   # app call to distributor contract
   @Subroutine(TealType.none)
-  def redeem_distributor(app_id, args):
+  def redeem_distributor(app_id):
     return Seq(
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields({
             TxnField.type_enum: TxnType.ApplicationCall,
-            TxnField.application_id: Int(app_id),
-            TxnField.on_complete: OnComplete.NoOp,
-            TxnField.application_args: args,
+            TxnField.application_id: app_id,
+            TxnField.on_completion: OnComplete.NoOp,
+            TxnField.application_args: Txn.application_args,
         }),
         InnerTxnBuilder.Submit()
     )
@@ -136,15 +136,15 @@ def approval():
   redeem = Seq(
     Assert(Txn.application_args[0] == Bytes("redeem")),
     Assert(Global.group_size() == Int(3)),
-    Assert(Txn.application_args.length() == Int(4)),
+    Assert(Txn.application_args.length() == Int(5)),
     Assert(Txn.type_enum() == TxnType.ApplicationCall),
     Assert(fees(Int(3))),
     Assert(Gtxn[1].accounts[0] != Txn.sender()),
-    Assert(Txn.on_completion() == OnComplete.NoOp),
-    Assert(Gtxn[4].sender() == Txn.sender()), # pool to pooler
-    Assert(Gtxn[4].asset_receiver() == Gtxn[2].sender()),
+    Assert(Txn.on_completion() == OnComplete.NoOp), 
+    Assert(Gtxn[2].sender() == Txn.sender()), # pool to pooler
+    Assert(Gtxn[2].asset_receiver() == Gtxn[2].sender()),
     # Assert(safety_conds()),
-    redeem_distributor(REDEEM_DISTRIBUTOR_APP_ID, Txn.application_args),
+    redeem_distributor(REDEEM_DISTRIBUTOR_APP_ID),
     Approve(),
   )
 
@@ -152,9 +152,10 @@ def approval():
     init=Approve(),
     opt_in=Cond(
       [Txn.application_args[0] == Bytes("bootstrap"), bootstrap],
+    ),
+    no_op=Cond(
       [Txn.application_args[0] == Bytes("redeem"), redeem],
     )
   )
 def clear():
   return Approve()
-
