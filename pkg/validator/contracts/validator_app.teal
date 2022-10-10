@@ -1,0 +1,275 @@
+#pragma version 7
+txn ApplicationID
+int 0
+==
+bnz main_l16
+txn OnCompletion
+int DeleteApplication
+==
+bnz main_l15
+txn OnCompletion
+int UpdateApplication
+==
+bnz main_l14
+txn OnCompletion
+int OptIn
+==
+bnz main_l11
+txn OnCompletion
+int CloseOut
+==
+bnz main_l10
+txn OnCompletion
+int NoOp
+==
+bnz main_l7
+err
+main_l7:
+txna ApplicationArgs 0
+byte "redeem"
+==
+bnz main_l9
+err
+main_l9:
+txna ApplicationArgs 0
+byte "redeem"
+==
+assert
+global GroupSize
+int 3
+==
+assert
+txn NumAppArgs
+int 5
+==
+assert
+txn TypeEnum
+int appl
+==
+assert
+int 3
+callsub fees_1
+assert
+gtxna 1 Accounts 0
+txn Sender
+!=
+assert
+txn OnCompletion
+int NoOp
+==
+assert
+gtxn 2 Sender
+txn Sender
+==
+assert
+gtxn 2 AssetReceiver
+gtxn 2 Sender
+==
+assert
+int 123
+callsub redeemdistributor_5
+int 1
+return
+main_l10:
+int 0
+return
+main_l11:
+txna ApplicationArgs 0
+byte "bootstrap"
+==
+bnz main_l13
+err
+main_l13:
+txna ApplicationArgs 0
+byte "bootstrap"
+==
+assert
+global GroupSize
+int 6
+==
+assert
+txn NumAppArgs
+int 4
+==
+assert
+int 6
+callsub fees_1
+assert
+callsub duplicatedasset_0
+assert
+callsub lpasset_4
+assert
+int 3
+txna ApplicationArgs 1
+callsub optinasset_3
+assert
+int 4
+txna ApplicationArgs 2
+callsub optinasset_3
+assert
+int 5
+txna ApplicationArgs 3
+callsub optinasset_3
+assert
+int 1
+return
+main_l14:
+int 0
+return
+main_l15:
+int 0
+return
+main_l16:
+int 1
+return
+
+// duplicated_asset
+duplicatedasset_0:
+txna ApplicationArgs 1
+txna ApplicationArgs 2
+!=
+txna ApplicationArgs 1
+txna ApplicationArgs 3
+!=
+&&
+txna ApplicationArgs 2
+txna ApplicationArgs 3
+!=
+&&
+retsub
+
+// fees
+fees_1:
+store 0
+gtxn 0 Fee
+int 1000
+>=
+gtxn 0 Amount
+int 1000
+load 0
+*
+>=
+&&
+gtxn 0 Sender
+txn Sender
+!=
+&&
+gtxn 0 Receiver
+txn Sender
+==
+&&
+retsub
+
+// snd_rcv
+sndrcv_2:
+store 3
+load 3
+gtxns Sender
+txn Sender
+==
+load 3
+gtxns Receiver
+txn Sender
+==
+&&
+retsub
+
+// optin_asset
+optinasset_3:
+store 2
+store 1
+load 1
+gtxns TypeEnum
+int axfer
+==
+load 1
+gtxns Amount
+int 0
+==
+&&
+load 1
+gtxns XferAsset
+load 2
+==
+&&
+load 1
+callsub sndrcv_2
+&&
+retsub
+
+// lp_asset
+lpasset_4:
+gtxn 2 TypeEnum
+int acfg
+==
+gtxn 2 ConfigAsset
+int 0
+==
+&&
+gtxn 2 ConfigAssetTotal
+int 18446744073709551615
+==
+&&
+gtxn 2 ConfigAssetDecimals
+int 6
+==
+&&
+gtxn 2 ConfigAssetDefaultFrozen
+int 0
+==
+&&
+gtxn 2 ConfigAssetUnitName
+byte "koifi1.0"
+==
+&&
+gtxn 2 ConfigAssetName
+extract 0 6
+byte "koifi-"
+==
+&&
+gtxn 2 ConfigAssetManager
+global ZeroAddress
+==
+&&
+gtxn 2 ConfigAssetReserve
+global ZeroAddress
+==
+&&
+gtxn 2 ConfigAssetFreeze
+global ZeroAddress
+==
+&&
+gtxn 2 ConfigAssetClawback
+global ZeroAddress
+==
+&&
+retsub
+
+// redeem_distributor
+redeemdistributor_5:
+store 4
+itxn_begin
+int appl
+itxn_field TypeEnum
+load 4
+itxn_field ApplicationID
+int NoOp
+itxn_field OnCompletion
+int 0
+store 5
+redeemdistributor_5_l1:
+load 5
+txn NumAppArgs
+<
+bz redeemdistributor_5_l3
+load 5
+txnas ApplicationArgs
+itxn_field ApplicationArgs
+load 5
+int 1
++
+store 5
+b redeemdistributor_5_l1
+redeemdistributor_5_l3:
+itxn_submit
+retsub
