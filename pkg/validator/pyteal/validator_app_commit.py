@@ -23,6 +23,7 @@ def approval():
   # TODO: get this apps ids from an app call to the registry contract
   REDEEM_DISTRIBUTOR_APP_ID = Int(123)
   COMMIT_DISTRIBUTOR_APP_ID = Int(456)
+  REGISTRY_APP_ID = Int(890)
 
 # TODO: add subroutine to verify application ID and txn type app call
 # TODO: verify if sender is not pooler, fees not charged, verify receiver
@@ -136,17 +137,12 @@ def approval():
         InnerTxnBuilder.Submit()
     )
 
-
+  # TODO: validate registry_id from global state (at REGISTRY_APP_ID)
   bootstrap = Seq(
     Assert(Txn.application_args[0] == Bytes("bootstrap")),
-    Assert(Global.group_size() == Int(6)),
-    Assert(Txn.application_args.length() == Int(4)),
-    Assert(fees(Int(6))),
-    Assert(duplicated_asset()),
-    Assert(lp_asset()),
-    Assert(optin_asset(Int(3), asset_1)),
-    Assert(optin_asset(Int(4), asset_2)),
-    Assert(optin_asset(Int(5), asset_3)),
+    Assert(Global.group_size() == Int(2)),
+    Assert(Txn.application_args.length() == Int(2)),
+    Assert(Txn.application_args[1] == REGISTRY_APP_ID),
     # Assert(safety_conds()),
     Approve(),
   )
@@ -177,10 +173,12 @@ def approval():
   # gtxn[2]: opt in asset
   # itxn: commit distributor app call
   # TODO: verify if gtxn[3] is it really necesary ?
+  # Txng args: 
+  # ['str:commit', 'int:asset_id', 'int:lp_asset_id', 'int:asset_amt', 'int:lp_asset_amt']
   commit = Seq(
     Assert(Txn.application_args[0] == Bytes("commit")),
-    Assert(Global.group_size() == Int(4)),
-    Assert(Txn.application_args.length() == Int(2)),
+    # Assert(Global.group_size() == Int(3)),
+    Assert(Txn.application_args.length() == Int(5)),
     Assert(Txn.type_enum() == TxnType.ApplicationCall),
     Assert(fees(Int(3))),
     Assert(Txn.on_completion() == OnComplete.NoOp), 
@@ -196,10 +194,10 @@ def approval():
 
   return program.event(
     init=Approve(),
-    opt_in=Cond(
-      [Txn.application_args[0] == Bytes("bootstrap"), bootstrap],
-    ),
+    # opt_in=Cond(
+    # ),
     no_op=Cond(
+      [Txn.application_args[0] == Bytes("bootstrap"), bootstrap],
       [Txn.application_args[0] == Bytes("commit"), commit],
       [Txn.application_args[0] == Bytes("redeem"), redeem],
     )
