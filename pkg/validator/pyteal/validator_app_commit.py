@@ -149,15 +149,25 @@ def approval():
 
   # redeem flow, gtxn:
   # gtxn[0]: fees
-  # gtxn[1]: validator app call
+  # gtxn[1]: Validator app call
+  # gtxn[2]: LP optin to asset_in ?
+  # gtxn[3]: in_asset transfer from LP to Pond*
+  # gtxn[4]: out_asset transfer from Pond to LP
   # itxn: redeem distributor app call itxn
-  # TODO: verify if gtxn[2] is it really necesary ?
+
+  # TODO: Define how weights update works here
+
+  # from: LP_address, to: Validator
+  # ['str:redeem', 'int:in_id', 'int:out_id*', 'int:in_amt', 'int:out_amt']
+
   redeem = Seq(
+    # Validate assets validator vs asset transfers (LP tokens)
+    # Validate LP token is Pond's asset
     Assert(Txn.application_args[0] == Bytes("redeem")),
-    Assert(Global.group_size() == Int(3)),
+    Assert(Global.group_size() == Int(5)),
     Assert(Txn.application_args.length() == Int(5)),
     Assert(Txn.type_enum() == TxnType.ApplicationCall),
-    Assert(fees(Int(3))),
+    # Assert(fees(Int(3))),
     Assert(Txn.on_completion() == OnComplete.NoOp), 
     Assert(Gtxn[1].accounts[0] != Txn.sender()),
     Assert(Gtxn[2].sender() == Txn.sender()), # pool to pooler
