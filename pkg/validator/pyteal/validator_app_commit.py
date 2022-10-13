@@ -148,11 +148,10 @@ def approval():
   )
 
   # redeem flow, gtxn:
-  # gtxn[0]: fees
+  # gtxn[0]: fees_dist app call *
   # gtxn[1]: Validator app call
   # gtxn[2]: LP optin to asset_in ?
-  # gtxn[3]: in_asset transfer from LP to Pond*
-  # gtxn[4]: out_asset transfer from Pond to LP
+  # gtxn[3]: in_asset transfer from LP to Pond
   # itxn: redeem distributor app call itxn
 
   # TODO: Define how weights update works here
@@ -164,7 +163,7 @@ def approval():
     # Validate assets validator vs asset transfers (LP tokens)
     # Validate LP token is Pond's asset
     Assert(Txn.application_args[0] == Bytes("redeem")),
-    Assert(Global.group_size() == Int(5)),
+    Assert(Global.group_size() == Int(4)),
     Assert(Txn.application_args.length() == Int(5)),
     Assert(Txn.type_enum() == TxnType.ApplicationCall),
     # Assert(fees(Int(3))),
@@ -178,13 +177,20 @@ def approval():
   )
 
   # commit flow, gtxn:
-  # gtxn[0]: fees
-  # gtxn[1]: validator app call
-  # gtxn[2]: opt in asset
-  # itxn: commit distributor app call
-  # TODO: verify if gtxn[3] is it really necesary ?
+  # gtxn[0]: fees_dist app call *
+  # gtxn[1]: Validator app call
+  
+  # Potentially solved inside contract
+  # ---
+  # gtxn[2]: LP optin to asset_out (LP token)
+  # gtxn[3]: Pond optin to asset_in (ASA)
+  # ---
+
+  # gtxn[4]: in_asset transfer from LP to Pond
+  # itxn: commit distributor app call itxn
+  
   # Txng args: 
-  # ['str:commit', 'int:asset_id', 'int:lp_asset_id', 'int:asset_amt', 'int:lp_asset_amt']
+  # ['str:commit', 'int:in_id', 'int:out_id*', 'int:in_amt', 'int:out_amt', str:1]
   commit = Seq(
     Assert(Txn.application_args[0] == Bytes("commit")),
     # Assert(Global.group_size() == Int(3)),
