@@ -1,4 +1,4 @@
-from ast import Assert
+from ast import Assert, If
 from operator import concat
 from pyteal import *
 from pyteal_helpers import program
@@ -23,7 +23,11 @@ def approval():
   # TODO: get this apps ids from an app call to the registry contract
   REDEEM_DISTRIBUTOR_APP_ID = Int(123)
   COMMIT_DISTRIBUTOR_APP_ID = Int(456)
+  ASSET_TRANSFER_APP_ID = Int(890)
   REGISTRY_APP_ID = Int(890)
+
+  lp_has_opted_in = ScratchVar(TealType.uint64)
+  pond_has_opted_in = ScratchVar(TealType.uint64)
 
 # TODO: add subroutine to verify application ID and txn type app call
 # TODO: verify if sender is not pooler, fees not charged, verify receiver
@@ -55,18 +59,18 @@ def approval():
       Gtxn[txn_index].receiver() == Txn.sender(),
     )
 
-  # Verifies correct params for asset optin.
-  @Subroutine(TealType.uint64)
-  def optin_asset(txn_index, asset_id):
-    # If(asset_id =! Int(0))
-    # .Then(
-    return And(
-      Gtxn[txn_index].type_enum() == TxnType.AssetTransfer,
-      Gtxn[txn_index].amount() == Int(0),
-      Gtxn[txn_index].xfer_asset() == asset_id,
-      snd_rcv(txn_index),
-    )
-    # )
+  # # Verifies correct params for asset optin.
+  # @Subroutine(TealType.uint64)
+  # def optin_asset(txn_index, asset_id):
+  #   # If(asset_id =! Int(0))
+  #   # .Then(
+  #   return And(
+  #     Gtxn[txn_index].type_enum() == TxnType.AssetTransfer,
+  #     Gtxn[txn_index].amount() == Int(0),
+  #     Gtxn[txn_index].xfer_asset() == asset_id,
+  #     snd_rcv(txn_index),
+  #   )
+  #   # )
 
   # Verifies LP asset is creatd correctly.
   @Subroutine(TealType.uint64)
@@ -137,6 +141,33 @@ def approval():
         InnerTxnBuilder.Submit()
     )
 
+  # app call to opt in contract
+  @Subroutine(TealType.none)
+  def optin_asset_call(app_id):
+    # Cond(
+    #   [And(lp_has_opted_in.load(), pond_has_opted_in.load()), ]
+    #   )
+    # TODO: figure out the way to pass the arguments and fields dinamically to the itxn
+    return Seq(
+        InnerTxnBuilder.Begin(),
+        InnerTxnBuilder.SetFields({
+            TxnField.type_enum: TxnType.ApplicationCall,
+            TxnField.application_id: app_id,
+            TxnField.on_completion: OnComplete.NoOp,
+            TxnField.application_args: [txn_ammounts.load(), txn_ammounts2.load()], # ['10', '130']
+            TxnField.accounts: [Gtxn[2].asset_receiver(), Gtxn[2].sender()], # pool, pooler
+            TxnField.assets: [],
+        }),
+        InnerTxnBuilder.Submit()
+    )
+
+  # checks if an account has opted in an asset
+  # TODO: code this! 
+  @Subroutine(TealType.uint64)
+  def optin_checker(address, asset_id):
+    asset_balance = AssetHolding.balance(address, asset_id)
+    return asset_balance.hasValue()
+
   # TODO: validate registry_id from global state (at REGISTRY_APP_ID)
   bootstrap = Seq(
     Assert(Txn.application_args[0] == Bytes("bootstrap")),
@@ -178,28 +209,31 @@ def approval():
 
   # commit flow, gtxn:
   # gtxn[0]: fees_dist app call *
-  # gtxn[1]: Validator app call
+  # gtxn[1]: Validator app call, sndr: LP, accs[]: pond
   
   # Potentially solved inside contract
   # ---
-  # gtxn[2]: LP optin to asset_out (LP token)
-  # gtxn[3]: Pond optin to asset_in (ASA)
+  # itxn: LP optin to asset_out (LP token)
+  # itxn: Pond optin to asset_in (ASA)
   # ---
 
-  # gtxn[4]: in_asset transfer from LP to Pond
+  # gtxn[2]: in_asset transfer from LP to Pond
   # itxn: commit distributor app call itxn
   
   # Txng args: 
-  # ['str:commit', 'int:in_id', 'int:out_id*', 'int:in_amt', 'int:out_amt', str:1]
+  # ['str:commit', 'int:out_id*', 'int:out_amt']
   commit = Seq(
     Assert(Txn.application_args[0] == Bytes("commit")),
-    # Assert(Global.group_size() == Int(3)),
-    Assert(Txn.application_args.length() == Int(5)),
+    Assert(Global.group_size() == Int(3)),
+    Assert(Txn.application_args.length() == Int(3)),
     Assert(Txn.type_enum() == TxnType.ApplicationCall),
-    Assert(fees(Int(3))),
-    Assert(Txn.on_completion() == OnComplete.NoOp), 
+    Assert(fees(Int(3))), ## TODO: verify this one
+    Assert(Txn.on_completion() == OnComplete.NoOp),
     Assert(Gtxn[1].sender() == Txn.sender()),
     Assert(Gtxn[1].accounts[0] != Txn.sender()),
+    lp_has_opted_in.store(optin_checker(Gtxn[2].asset_sender(), Gtxn[1].application_args[1])),
+    pond_has_opted_in.store(optin_checker(Gtxn[2].asset_receiver(), Gtxn[2].xfer_asset())),
+    
     Assert(optin_asset(Int(2), Txn.application_args[1])),
     Assert(Gtxn[3].sender() != Txn.sender()), # pooler to pool
     Assert(Gtxn[3].asset_receiver() == Txn.sender()), # rcvr is pool
