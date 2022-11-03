@@ -1,7 +1,54 @@
 from pyteal import *
 from beaker import *
+# TODO: Add precompile for testing 
+
+class asset_optin_helper(Application):
+
+
+  @external
+  def optin_checker(self, address: abi.Address, asset_id: abi.Uint64): # TODO: Restore abi Types
+      asset_balance = AssetHolding.balance(address, asset_id)
+      print("****************")
+      print(asset_balance.hasValue())
+      return Seq(
+        If(AssetHolding.balance(address, asset_id).hasValue() == Int(0))
+        .Then(self.opt_in_to_asset(address, asset_id))
+      )
+  
+  @internal(TealType.uint64)
+  def opt_in_to_asset(self, asset: abi.Asset):
+
+    return Int(1)
+        # return InnerTxnBuilder.Execute(
+        #     {
+        #         TxnField.type_enum: TxnType.AssetTransfer,
+        #         TxnField.xfer_asset: asset.asset_id(),
+        #         TxnField.asset_receiver: self.address,
+        #         TxnField.fee: Int(0),
+        #         TxnField.asset_amount: Int(0),
+        #     }
+        #  )
 
 class Validator(Application):
+
+  sub_app = asset_optin_helper()
+
+  sub_app_approval: Precompile(sub_app.approval_program)
+  sub_app_clear: Precompile(sub_app.clear_program)
+
+  @external
+  def create_sub(self, *, output: abi.Uint64):
+    return Seq(
+      InnerTxnBuilder.Execute(
+        {
+          Txn.type_enum: TxnType.ApplicationCall,
+          TxnField.approval_program: self.sub_app_approval.binary_bytes,
+          TxnField.clear_state_program: self.sub_app_clear.binary_bytes
+        }
+        ),
+        print("The sub contract is instantiated!")
+        # output.set(InnerTxn.created_application_id()),
+    )
 
   # How to know when to trigger the bootstrap?
   @external
@@ -62,15 +109,11 @@ class Validator(Application):
   #         InnerTxnBuilder.Submit()
   #     )
 
-  @internal(TealType.uint64)
-  def optin_checker(self, address, asset_id): # TODO: Restore abi Types
-      asset_balance = AssetHolding.balance(address, asset_id)
-      print("****************")
-      print(asset_balance.hasValue())
-      return asset_balance.hasValue()
+
 
   @internal(TealType.none)
   def optin_asset(self, address_1: abi.Address, address_2: abi.Address, asset_id_1: abi.Uint64, asset_id_2: abi.Uint64):
+    lp_has_opted_in(self, ScratchVar(TealType.uint64))
     # return Cond(
     #   [And(lp_has_opted_in != 0, pond_has_opted_in != 0), call_optin_helper(address_1, address_2, asset_id_1, asset_id_2)],
     #   [And(lp_has_opted_in == 0, pond_has_opted_in == 0), None],
@@ -78,7 +121,7 @@ class Validator(Application):
     #   [And(lp_has_opted_in == 0, pond_has_opted_in != 0), call_optin_helper(address_1, asset_id_1)]
     # )
     print('halo')
-    return none
+    return none()
 
 def demo():
   print("Hello beaker")
@@ -101,7 +144,7 @@ def demo():
   # print(f"Result: {result.return_value}")
 
   result = app_client.call(Validator.commit_pond, lp_txns_amount=2)
-  print(f"Result: {result.return_value}")
+  print(f"Result: {optin_checker(app_id)}")
 
 
 if __name__ == "__main__":
