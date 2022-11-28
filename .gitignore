@@ -110,3 +110,6 @@ dist
 !.yarn/plugins
 !.yarn/sdks
 !.yarn/versions
+
+# Python venv
+venv
