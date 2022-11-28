@@ -1,4 +1,5 @@
 from pyteal import *
+from beaker import *
 
 def approval():
 
