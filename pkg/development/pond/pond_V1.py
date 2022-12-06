@@ -14,12 +14,14 @@ class PondErrors:
     GroupSizeNot2 = "group size not 2"
     ReceiverNotAppAddr = "receiver not app address"
     AmountLessThanMinimum = "amount minimum not met"
-    AssetIdsIncorrect = "asset a or asset b or asset c incorrect"
-    AssetInIncorrect = "incoming asset incorrect"
+    AssetIdsIncorrect = "Incorrect asset"
+    AssetAIncorrect = "Asset A incorrect"
+    AssetBIncorrect = "Asset B incorrect"
+    AssetCIncorrect = "Asset C incorrect"
     AssetPondIncorrect = "pond asset incorrect"
     SenderInvalid = "invalid sender"
     # MissingBalances = "missing required balances"
-    # SendAmountTooLow = "outgoing amount too low"
+    SendAmountTooLow = "outgoing amount too low"
 
 class Pond(Application):
 
@@ -41,12 +43,6 @@ class Pond(Application):
     asset_b: Final[ApplicationStateValue] = ApplicationStateValue(
         stack_type=TealType.uint64,
         key=Bytes("b"),
-        static=True,
-        descr="The asset id of asset B",
-    )
-    asset_c: Final[ApplicationStateValue] = ApplicationStateValue(
-        stack_type=TealType.uint64,
-        key=Bytes("c"),
         static=True,
         descr="The asset id of asset B",
     )
@@ -100,7 +96,6 @@ class Pond(Application):
         seed: abi.PaymentTransaction,
         a_asset: abi.Asset,
         b_asset: abi.Asset,
-        c_asset: abi.Asset,
         *,
         output: abi.Uint64,
     ):
@@ -111,11 +106,9 @@ class Pond(Application):
         Args:
             seed: Initial Payment transaction to the app account so it can opt 
             in to assets and create pond token.
-            a_asset: One of the three assets this pond should allow swapping 
+            a_asset: One of the two assets this pond should allow swapping 
             between.
-            b_asset: One of the three assets this pond should allow swapping 
-            between.
-            c_asset: One of the three assets this pond should allow swapping 
+            b_asset: One of the two assets this pond should allow swapping 
             between.
         Returns:
             The asset id of the pond token created.
@@ -132,11 +125,7 @@ class Pond(Application):
                 PondErrors.AmountLessThanMinimum,
             ),
             (
-                And(
-                    a_asset.asset_id() != b_asset.asset_id(),
-                    a_asset.asset_id() != c_asset.asset_id(),
-                    b_asset.asset_id() != c_asset.asset_id(),
-                ),
+                a_asset.asset_id() != b_asset.asset_id(),
                 PondErrors.AssetIdsIncorrect,
             ),
         ]
@@ -145,63 +134,133 @@ class Pond(Application):
             *commented_assert(well_formed_bootstrap),
             self.asset_a.set(a_asset.asset_id()),
             self.asset_b.set(b_asset.asset_id()),
-            self.asset_c.set(c_asset.asset_id()),
             self.pond_token.set(
                 self.do_create_pond_token(
                     self.asset_a,
-                    self.asset_b,
-                    self.asset_c
+                    self.asset_b
                 ),
             ),
             self.do_opt_in(self.asset_a),
             self.do_opt_in(self.asset_b),
-            self.do_opt_in(self.asset_c),
             output.set(self.pond_token),
         )
-    
+
     @external
     def mint(
         self,
-        in_xfer: abi.AssetTransferTransaction,
-        in_asset: abi.Asset,  # type: ignore[assignment]
-        pond_asset: abi.Asset = pond_token,  # type: ignore[assignment]
+        a_xfer: abi.AssetTransferTransaction,
+        b_xfer: abi.AssetTransferTransaction,
+        pond_asset: abi.Asset = pond_token,  # type: ignore[assignment],
+        a_asset: abi.Asset = asset_a,  # type: ignore[assignment],
+        b_asset: abi.Asset = asset_b,  # type: ignore[assignment],
         ):
-        """mint pond tokens given some amount of in_asset on commit.
+        """mint pond tokens given some amount of a_asset and b_asset 
+        on commit.
 
-        Given some amount of stable asset in the transfer, mint some number of 
-        pool tokens calculated with the pond's current balance and 
+        Given some amount of stable assets in the transfer, mint some number of 
+        pond tokens calculated with the pond's current balance and 
         circulating supply of pond tokens.
 
         Args:
-            in_xfer: Asset Transfer Transaction of in_asset as a deposit to the 
+            a_xfer: Asset Transfer Transaction of a_asset as a deposit to the 
             pond in exchange for pond tokens.
-            in_asset: The asset ID of the incoming asset so that we may inspect 
-            our balance.
+            b_xfer: Asset Transfer Transaction of b_asset as a deposit to the 
+            pond in exchange for pond tokens.
             pond_asset: The asset ID of the pond token so that we may 
+            a_asset: The asset ID of the asset A token so that we may 
+            distribute it.
+            b_asset: The asset ID of the asset B token so that we may 
             distribute it.
         """
 
         well_formed_mint = [
+            (a_asset.asset_id() == self.asset_a, PondErrors.AssetAIncorrect),
+            (b_asset.asset_id() == self.asset_b, PondErrors.AssetBIncorrect),
             (
-                Or(
-                    in_asset.asset_id() == self.asset_a,
-                    in_asset.asset_id() == self.asset_b,
-                    in_asset.asset_id() == self.asset_c
+                And(
+                    a_xfer.get().sender() == Txn.sender(),
+                    b_xfer.get().sender() == Txn.sender()
                 ),
-                PondErrors.AssetInIncorrect,
-            ),
-            (
-                pond_asset.asset_id() == self.pond_token,
-                PondErrors.AssetPondIncorrect,
-            ),
-            (
-                in_xfer.get().sender() == Txn.sender(),
-                PondErrors.SenderInvalid,
+                PondErrors.SenderInvalid
             ),
         ]
-        return Seq(
-            # transfers asset_in from lp to pond
 
+        valid_asset_a_xfer = [
+            (
+                a_xfer.get().asset_receiver() == self.address,
+                PondErrors.ReceiverNotAppAddr,
+            ),
+            (
+                a_xfer.get().xfer_asset() == self.asset_a,
+                PondErrors.AssetAIncorrect,
+            ),
+            (
+                a_xfer.get().asset_amount() > Int(0),
+                PondErrors.AmountLessThanMinimum,
+            ),
+        ]
+
+        valid_asset_b_xfer = [
+            (
+                b_xfer.get().asset_receiver() == self.address,
+                PondErrors.ReceiverNotAppAddr,
+            ),
+            (
+                b_xfer.get().xfer_asset() == self.asset_b,
+                PondErrors.AssetAIncorrect,
+            ),
+            (
+                b_xfer.get().asset_amount() > Int(0),
+                PondErrors.AmountLessThanMinimum,
+            ),
+        ]
+
+        return Seq(
+            # Check that the transaction is constructed correctly
+            *commented_assert(
+                well_formed_mint + valid_asset_a_xfer + valid_asset_b_xfer
+            ),
+            # Check that we have these data to calculate pond token amt out
+            (pond_bal := pond_asset.holding(self.address).balance()),
+            (a_bal := a_asset.holding(self.address).balance()),
+            (b_bal := b_asset.holding(self.address).balance()),
+            Assert(
+                pond_bal.hasValue(),
+                a_bal.hasValue(),
+                b_bal.hasValue(),
+            ),
+            (to_mint := ScratchVar()).store(
+                If(
+                    And(
+                        a_bal.value() == a_xfer.get().asset_amount(),
+                        b_bal.value() == b_xfer.get().asset_amount()
+                    ),
+
+                    # We calculate minting amt:
+
+                    # If it is the first time we've been called
+                    # we use a different formula to mint tokens
+                    self.tokens_to_mint_initial(
+                        a_xfer.get().asset_amount(), 
+                        b_xfer.get().asset_amount()
+                    ),
+                    # Normal mint
+                    self.tokens_to_mint(
+                        self.total_supply - pond_bal.value(),
+                        a_bal.value() - a_xfer.get().asset_amount(),
+                        b_bal.value() - b_xfer.get().asset_amount(),
+                        a_xfer.get().asset_amount(),
+                        b_xfer.get().asset_amount(),
+                    ),
+                )
+            ),
+            Assert(
+                to_mint.load() > Int(0),
+                comment=PondErrors().SendAmountTooLow,
+            ),
+            # mint tokens
+            self.do_axfer(Txn.sender(), self.pond_token, to_mint.load()),
+            self.ratio.set(self.compute_ratio()),
         )
 
     # @external
@@ -231,9 +290,39 @@ class Pond(Application):
     #         # Transfer assets out (optin LP token)
     #     )
 
-    ##############
-    # Utility methods for inner transactions
-    ##############
+    ##########################
+    ## Mathemagical methods ##
+    ##########################
+
+    @internal(TealType.uint64)
+    def tokens_to_mint_initial(self, a_amount, b_amount):
+        return Sqrt(a_amount * b_amount) - self.scale
+
+    @internal(TealType.uint64)
+    def tokens_to_mint(
+        self, 
+        issued, 
+        a_supply, 
+        b_supply, 
+        a_amount, 
+        b_amount
+    ):
+        return Seq(
+            (a_rat := ScratchVar()).store(
+                WideRatio([a_amount, self.scale], [a_supply])
+            ),
+            (b_rat := ScratchVar()).store(
+                WideRatio([b_amount, self.scale], [b_supply])
+            ),
+            WideRatio(
+                [If(a_rat.load() < b_rat.load(), a_rat.load(), b_rat.load()), issued],
+                [self.scale],
+            ),
+        )
+
+    ############################################
+    ## Utility methods for inner transactions ##
+    ############################################
 
     @internal(TealType.none)
     def do_axfer(self, rx, aid, amt):
@@ -252,15 +341,13 @@ class Pond(Application):
         return self.do_axfer(self.address, aid, Int(0))
 
     @internal(TealType.uint64)
-    def do_create_pond_token(self, a, b, c):
+    def do_create_pond_token(self, a, b):
         return Seq(
             (una := AssetParam.unitName(a)),
             (unb := AssetParam.unitName(b)),
-            (unc := AssetParam.unitName(c)),
             Assert(
                 una.hasValue(), 
-                unb.hasValue(),
-                unc.hasValue()
+                unb.hasValue()
             ),
             InnerTxnBuilder.Execute(
                 {
@@ -269,9 +356,7 @@ class Pond(Application):
                         Bytes("KOIFI-V1-POND-"), 
                         una.value(), 
                         Bytes("-"), 
-                        unb.value(), 
-                        Bytes("-"), 
-                        unc.value()
+                        unb.value()
                     ),
                     TxnField.config_asset_unit_name: Bytes("POND"),
                     TxnField.config_asset_total: self.total_supply,
@@ -282,6 +367,28 @@ class Pond(Application):
                 }
             ),
             InnerTxn.created_asset_id(),
+        )
+
+    @internal(TealType.uint64)
+    def compute_ratio(self):
+        return Seq(
+            (
+                bal_a := AssetHolding.balance(
+                    self.address,
+                    self.asset_a
+                )
+            ),
+            (
+                bal_b := AssetHolding.balance(
+                    self.address,
+                    self.asset_b
+                )
+            ),
+            Assert(
+                bal_a.hasValue(),
+                bal_b.hasValue(),
+            ),
+            WideRatio([bal_a.value(), self.scale], [bal_b.value()]),
         )
     
 
@@ -323,11 +430,10 @@ def demo():
     # Create assets
     asset_a = create_asset(algod_client, addr, sk, "A")
     asset_b = create_asset(algod_client, addr, sk, "B")
-    asset_c = create_asset(algod_client, addr, sk, "C")
-    print(f"Created asset a/b/c with ids: {asset_a}/{asset_b}/{asset_c}")
+    print(f"Created asset a/b with ids: {asset_a}/{asset_b}")
 
-    # Call app to create pool token
-    print("Calling bootstrap ~( > 3 < )~")
+    # Call app to create pond token
+    print("Calling bootstrap")
     sp = algod_client.suggested_params()
     ptxn = TransactionWithSigner(
         txn=transaction.PaymentTxn(addr, sp, app_addr, int(1e7)), signer=signer
@@ -339,7 +445,6 @@ def demo():
         seed=ptxn,
         a_asset=asset_a,
         b_asset=asset_b,
-        c_asset=asset_c,
         suggested_params=sp,
     )
     pond_token = result.return_value
@@ -352,8 +457,7 @@ def demo():
         addr, 
         pond_token, 
         asset_a, 
-        asset_b, 
-        asset_c
+        asset_b
     )
 
     # Opt user into token
@@ -374,52 +478,71 @@ def demo():
         addr, 
         pond_token, 
         asset_a, 
-        asset_b, 
-        asset_c
+        asset_b
     )
 
-    # # Cover any fees incurred by inner transactions, maybe overpaying but thats 
-    # # ok
-    # # TODO: Review to avoid overpaying
-    # sp = client.suggested_params()
-    # sp.flat_fee = True
-    # sp.fee = consts.milli_algo * 3
+    # Cover any fees incurred by inner transactions, maybe overpaying but 
+    # thats ok
+    # TODO: Review to avoid overpaying
+    sp = algod_client.suggested_params()
+    sp.flat_fee = True
+    sp.fee = consts.milli_algo * 3
 
-    # ###
-    # # Fund Pool with initial liquidity
-    # ###
-    # print("Funding")
-    # app_client.call(
-    #     Pond.mint,
-    #     a_xfer=TransactionWithSigner(
-    #         txn=transaction.AssetTransferTxn(addr, sp, app_addr, 10000, asset_a),
-    #         signer=signer,
-    #     ),
-    #     b_xfer=TransactionWithSigner(
-    #         txn=transaction.AssetTransferTxn(addr, sp, app_addr, 3000, asset_b),
-    #         signer=signer,
-    #     ),
-    #     c_xfer=TransactionWithSigner(
-    #         txn=transaction.AssetTransferTxn(addr, sp, app_addr, 3000, asset_c),
-    #         signer=signer,
-    #     ),
-    #     suggested_params=sp,
-    # )
-    # print_balances(
-    #     algod_client,
-    #     app_client,
-    #     app_id, 
-    #     app_addr, 
-    #     addr, 
-    #     pond_token, 
-    #     asset_a, 
-    #     asset_b, 
-    #     asset_c
-    # )
+    ###
+    # Fund Pool with initial liquidity commiting the 3 assets
+    ###
+    print("Funding")
+    result = app_client.call(
+        Pond.mint,
+        a_xfer=TransactionWithSigner(
+            txn=transaction.AssetTransferTxn(addr, sp, app_addr, 3000, asset_a),
+            signer=signer,
+        ),
+        b_xfer=TransactionWithSigner(
+            txn=transaction.AssetTransferTxn(addr, sp, app_addr, 3000, asset_b),
+            signer=signer,
+        ),
+        suggested_params=sp,
+    )
+    print_balances(
+        algod_client,
+        app_client,
+        app_id, 
+        app_addr, 
+        addr, 
+        pond_token, 
+        asset_a, 
+        asset_b
+    )
 
-    # result = app_client.call(Pond.bootstrap, rg=12)
-    # print(f"Result: {result.return_value}")
+    ###
+    # Mint pool tokens
+    ###
+    print("Minting")
+    app_client.call(
+        Pond.mint,
+        a_xfer=TransactionWithSigner(
+            txn=transaction.AssetTransferTxn(addr, sp, app_addr, 1000, asset_a),
+            signer=signer,
+        ),
+        b_xfer=TransactionWithSigner(
+            txn=transaction.AssetTransferTxn(addr, sp, app_addr, 1000, asset_b),
+            signer=signer,
+        ),
+        suggested_params=sp,
+    )
+    print_balances(
+        algod_client,
+        app_client,
+        app_id, 
+        app_addr, 
+        addr, 
+        pond_token, 
+        asset_a, 
+        asset_b
+    )
 
+    # # result = app_client.call(Pond.bootstrap, rg=12)
     # print(f"Result: {result.return_value}")
 
 def create_asset(client, addr, pk, unitname):
@@ -443,8 +566,7 @@ def print_balances(
     addr: str, 
     pond: int, 
     a: int, 
-    b: int,
-    c: int
+    b: int
 ):
 
     addrbal = client.account_info(addr)
@@ -456,8 +578,6 @@ def print_balances(
             print("\tAssetA Balance {}".format(asset["amount"]))
         if asset["asset-id"] == b:
             print("\tAssetB Balance {}".format(asset["amount"]))
-        if asset["asset-id"] == c:
-            print("\tAssetC Balance {}".format(asset["amount"]))
 
     appbal = client.account_info(app)
     print("App: ")
@@ -468,17 +588,15 @@ def print_balances(
             print("\tAssetA Balance {}".format(asset["amount"]))
         if asset["asset-id"] == b:
             print("\tAssetB Balance {}".format(asset["amount"]))
-        if asset["asset-id"] == c:
-            print("\tAssetC Balance {}".format(asset["amount"]))
 
     state = app_client.get_application_state()
     state_key = Pond.ratio.str_key()
     if state_key in state:
         print(
-            f"\tCurrent ratio a/b/c == {int(state[state_key]) / Pond._scale}"
+            f"\tCurrent ratio a/b == {int(state[state_key]) / Pond._scale}"
         )
     else:
-        print("\tNo ratio a/b/c")
+        print("\tNo ratio a/b")
     
 if __name__ == "__main__":
     Pond().dump("artifacts")
