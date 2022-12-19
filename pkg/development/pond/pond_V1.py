@@ -263,6 +263,82 @@ class Pond(Application):
             self.ratio.set(self.compute_ratio()),
         )
 
+    @external
+    def swap(
+        self,
+        swap_xfer: abi.AssetTransferTransaction,
+        a_asset: abi.Asset = asset_a,  # type: ignore[assignment]
+        b_asset: abi.Asset = asset_b,  # type: ignore[assignment]
+    ):
+        """Swap some amount of either asset A or asset B for the other
+        Args:
+            swap_xfer: Asset Transfer Transaction of either Asset A or Asset B
+            a_asset: Asset ID of asset A so we may inspect balance and possibly transfer it
+            b_asset: Asset ID of asset B so we may inspect balance and possibly transfer it
+        """
+        well_formed_swap = [
+            (
+                a_asset.asset_id() == self.asset_a,
+                PondErrors.AssetAIncorrect,
+            ),
+            (
+                b_asset.asset_id() == self.asset_b,
+                PondErrors.AssetBIncorrect,
+            ),
+        ]
+
+        valid_swap_xfer = [
+            (
+                Or(
+                    swap_xfer.get().xfer_asset() == self.asset_a,
+                    swap_xfer.get().xfer_asset() == self.asset_b,
+                ),
+                PondErrors.AssetIdsIncorrect,
+            ),
+            (
+                swap_xfer.get().asset_amount() > Int(0),
+                PondErrors.AmountLessThanMinimum,
+            ),
+            (
+                swap_xfer.get().sender() == Txn.sender(),
+                PondErrors.SenderInvalid,
+            ),
+        ]
+
+        out_id = If(
+            swap_xfer.get().xfer_asset() == self.asset_a,
+            self.asset_b,
+            self.asset_a,
+        )
+        in_id = swap_xfer.get().xfer_asset()
+
+        return Seq(
+            *commented_assert(well_formed_swap + valid_swap_xfer),
+            in_sup := AssetHolding.balance(self.address, in_id),
+            out_sup := AssetHolding.balance(self.address, out_id),
+            Assert(
+                in_sup.hasValue(),
+                out_sup.hasValue(),
+            ),
+            (to_swap := ScratchVar()).store(
+                self.tokens_to_swap(
+                    swap_xfer.get().asset_amount(),
+                    in_sup.value() - swap_xfer.get().asset_amount(),
+                    out_sup.value(),
+                )
+            ),
+            Assert(
+                to_swap.load() > Int(0),
+                comment=PondErrors.SendAmountTooLow,
+            ),
+            self.do_axfer(
+                Txn.sender(),
+                out_id,
+                to_swap.load(),
+            ),
+            self.ratio.set(self.compute_ratio()),
+        )
+
     # @external
     # def redeem():
     #     pass
@@ -318,6 +394,14 @@ class Pond(Application):
                 [If(a_rat.load() < b_rat.load(), a_rat.load(), b_rat.load()), issued],
                 [self.scale],
             ),
+        )
+
+    @internal(TealType.uint64)
+    def tokens_to_swap(self, in_amount, in_supply, out_supply):
+        factor = self.scale - self.fee
+        return WideRatio(
+            [in_amount, factor, out_supply],
+            [(in_supply * self.scale) + (in_amount * factor)],
         )
 
     ############################################
@@ -530,6 +614,50 @@ def demo():
             signer=signer,
         ),
         suggested_params=sp,
+    )
+    print_balances(
+        algod_client,
+        app_client,
+        app_id, 
+        app_addr, 
+        addr, 
+        pond_token, 
+        asset_a, 
+        asset_b
+    )
+
+    ###
+    # Swap A for B
+    ###
+    print("Swapping A for B")
+    app_client.call(
+        Pond.swap,
+        swap_xfer=TransactionWithSigner(
+            txn=transaction.AssetTransferTxn(addr, sp, app_addr, 1000, asset_a),
+            signer=signer,
+        ),
+    )
+    print_balances(
+        algod_client,
+        app_client,
+        app_id, 
+        app_addr, 
+        addr, 
+        pond_token, 
+        asset_a, 
+        asset_b
+    )
+
+    ###
+    # Swap B for A
+    ###
+    print("Swapping B for A")
+    app_client.call(
+        Pond.swap,
+        swap_xfer=TransactionWithSigner(
+            txn=transaction.AssetTransferTxn(addr, sp, app_addr, 1000, asset_b),
+            signer=signer,
+        ),
     )
     print_balances(
         algod_client,

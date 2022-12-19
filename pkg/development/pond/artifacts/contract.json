@@ -63,6 +63,30 @@
                 "type": "void"
             },
             "desc": "mint pond tokens given some amount of a_asset and b_asset\non commit.\nGiven some amount of stable assets in the transfer, mint some number of  pond tokens calculated with the pond's current balance and  circulating supply of pond tokens.\nArgs:     a_xfer: Asset Transfer Transaction of a_asset as a deposit to the      pond in exchange for pond tokens.     b_xfer: Asset Transfer Transaction of b_asset as a deposit to the      pond in exchange for pond tokens.     pond_asset: The asset ID of the pond token so that we may      a_asset: The asset ID of the asset A token so that we may      distribute it.     b_asset: The asset ID of the asset B token so that we may      distribute it."
+        },
+        {
+            "name": "swap",
+            "args": [
+                {
+                    "type": "axfer",
+                    "name": "swap_xfer",
+                    "desc": "Asset Transfer Transaction of either Asset A or Asset B"
+                },
+                {
+                    "type": "asset",
+                    "name": "a_asset",
+                    "desc": "Asset ID of asset A so we may inspect balance and possibly transfer it"
+                },
+                {
+                    "type": "asset",
+                    "name": "b_asset",
+                    "desc": "Asset ID of asset B so we may inspect balance and possibly transfer it"
+                }
+            ],
+            "returns": {
+                "type": "void"
+            },
+            "desc": "Swap some amount of either asset A or asset B for the other"
         }
     ],
     "networks": {}
