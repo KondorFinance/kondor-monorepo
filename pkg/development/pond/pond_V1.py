@@ -264,6 +264,99 @@ class Pond(Application):
         )
 
     @external
+    def burn(
+        self,
+        pool_xfer: abi.AssetTransferTransaction,
+        pool_asset: abi.Asset = pond_token,  # type: ignore[assignment]
+        a_asset: abi.Asset = asset_a,  # type: ignore[assignment]
+        b_asset: abi.Asset = asset_b,  # type: ignore[assignment]
+    ):
+        """burn pool tokens to get back some amount of asset A and asset B
+        Args:
+            pool_xfer: Asset Transfer Transaction of the pool token for the amount the sender wishes to redeem
+            pool_asset: Asset ID of the pool token so we may inspect balance.
+            a_asset: Asset ID of Asset A so we may inspect balance and distribute it
+            b_asset: Asset ID of Asset B so we may inspect balance and distribute it
+        """
+
+        well_formed_burn = [
+            (
+                pool_asset.asset_id() == self.pond_token,
+                PondErrors.AssetPondIncorrect,
+            ),
+            (
+                a_asset.asset_id() == self.asset_a,
+                PondErrors.AssetAIncorrect,
+            ),
+            (
+                b_asset.asset_id() == self.asset_b,
+                PondErrors.AssetBIncorrect,
+            ),
+        ]
+
+        valid_pool_xfer = [
+            (
+                pool_xfer.get().asset_receiver() == self.address,
+                PondErrors.ReceiverNotAppAddr,
+            ),
+            (
+                pool_xfer.get().asset_amount() > Int(0),
+                PondErrors.AmountLessThanMinimum,
+            ),
+            (
+                pool_xfer.get().xfer_asset() == self.pond_token,
+                PondErrors.AssetPondIncorrect,
+            ),
+            (
+                pool_xfer.get().sender() == Txn.sender(),
+                PondErrors.SenderInvalid,
+            ),
+        ]
+
+        return Seq(
+            *commented_assert(well_formed_burn + valid_pool_xfer),
+            pool_bal := pool_asset.holding(self.address).balance(),
+            a_bal := a_asset.holding(self.address).balance(),
+            b_bal := b_asset.holding(self.address).balance(),
+            Assert(
+                pool_bal.hasValue(),
+                a_bal.hasValue(),
+                b_bal.hasValue(),
+            ),
+            # Get the total number of tokens issued (prior to receiving the current axfer of pool tokens)
+            (issued := ScratchVar()).store(
+                self.total_supply - (pool_bal.value() - pool_xfer.get().asset_amount())
+            ),
+            (a_amt := ScratchVar()).store(
+                self.tokens_to_burn(
+                    issued.load(),
+                    a_bal.value(),
+                    pool_xfer.get().asset_amount(),
+                )
+            ),
+            (b_amt := ScratchVar()).store(
+                self.tokens_to_burn(
+                    issued.load(),
+                    b_bal.value(),
+                    pool_xfer.get().asset_amount(),
+                )
+            ),
+            # Send back commensurate amt of a
+            self.do_axfer(
+                Txn.sender(),
+                self.asset_a,
+                a_amt.load(),
+            ),
+            # Send back commensurate amt of b
+            self.do_axfer(
+                Txn.sender(),
+                self.asset_b,
+                b_amt.load(),
+            ),
+            self.ratio.set(self.compute_ratio()),
+        )
+
+    @external
     def swap(
         self,
         swap_xfer: abi.AssetTransferTransaction,
@@ -395,6 +488,10 @@ class Pond(Application):
                 [self.scale],
             ),
         )
+    
+    @internal(TealType.uint64)
+    def tokens_to_burn(self, issued, supply, amount):
+        return WideRatio([supply, amount], [issued])
 
     @internal(TealType.uint64)
     def tokens_to_swap(self, in_amount, in_supply, out_supply):
@@ -656,6 +753,28 @@ def demo():
         Pond.swap,
         swap_xfer=TransactionWithSigner(
             txn=transaction.AssetTransferTxn(addr, sp, app_addr, 1000, asset_b),
+            signer=signer,
+        ),
+    )
+    print_balances(
+        algod_client,
+        app_client,
+        app_id, 
+        app_addr, 
+        addr, 
+        pond_token, 
+        asset_a, 
+        asset_b
+    )
+
+    ###
+    # Burn pool tokens
+    ###
+    print("Burning")
+    app_client.call(
+        Pond.burn,
+        pool_xfer=TransactionWithSigner(
+            txn=transaction.AssetTransferTxn(addr, sp, app_addr, 700, pond_token),
             signer=signer,
         ),
     )
