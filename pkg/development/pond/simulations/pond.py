@@ -1,4 +1,7 @@
 from dataclasses import dataclass
+from re import X
+from time import clock_getres
+from tkinter import Y
 import numpy as np
 from copy import copy
 
@@ -15,6 +18,9 @@ class ConstantProductInvariant:
 
     scale: int
     fee: int
+
+    _A: int
+    A_PRECISION: int
 
     def mint(self, a: int, b: int) -> int:
         a_rat = (a * self.scale) // self.a_supply
@@ -50,14 +56,15 @@ class ConstantProductInvariant:
     def swap(self, amount: int, is_a: bool) -> int:
 
         if is_a:
-            swap_amt = self._get_tokens_to_swap(amount, self.a_supply, self.b_supply)
+            swap_amt = self._get_tokens_to_swap(amount, self.a_supply, self.b_supply, 0 , 1)
             if swap_amt == 0:
                 return 0
             self.a_supply += amount
             self.b_supply -= swap_amt
             return swap_amt
 
-        swap_amt = self._get_tokens_to_swap(amount, self.b_supply, self.a_supply)
+        # swap_amt = self._get_tokens_to_swap(amount, self.b_supply, self.a_supply, 1, 0)
+        swap_amt = self._get_tokens_to_swap(amount, self.a_supply, self.b_supply, 1 , 0)
         if swap_amt == 0:
             return 0
 
@@ -65,38 +72,117 @@ class ConstantProductInvariant:
         self.a_supply -= swap_amt
         return swap_amt
 
-    def _get_tokens_to_swap(self, in_amount, in_supply, out_supply) -> int:
+    def _get_tokens_to_swap(self, in_amount, in_supply, out_supply, tokenIndexFrom, tokenIndexTo) -> int:
         assert in_supply > 0
         assert out_supply > 0
-        """ Constant product swap method with fixed input
-            X * Y = K
-            X, Y are current supply of assets, goal is to keep K the same after adding in_amt and subtracting out amt 
-            With no fees:
-            ------------
-            (X + X_in) * (Y - Y_out) = X*Y
-            *Algebra happens*
-            Y - ( X*Y / (X + X_in)) = Y_out
-            With fees:
-            ----------
-            fee_factor = scale - fee (ex 1000, 3 for a .3% fee)
-            X_adj = X_in * (fee_factor)
-            (X + X_adj) * (Y - Y_out) = X*Y
-            *Algebra happens*
-            Y - ( X*Y / (X + X_adj)) = Y_out
-            Or as in [Tinyman](https://github.com/tinymanorg/tinyman-contracts-v1/blob/main/contracts/validator_approval.teal#L1000): 
-            Y_out = (X_adj * Y) / (X * scale + X_adj)
+        """ Stable swap method for n stable assets, 
+            it combines the sum formula and the constant product formula,
+            the generalized expresion for n number of stable asstes:
+
+            X + Y  + (X * Y) = D + (D^n / n)
+
+            Where:
+            n is the number of stable asstes
+            D is the total number of coins when they have an equal price
+            X, Y are current supply of assets
         """
 
-        # Simple, no fees
-        # out_amt = out_supply - ((in_supply * out_supply) / (in_supply + in_amount))
+        print('in: ', in_amount, 'X: ', in_supply, 'Y: ', out_supply)
+        x = in_amount + in_supply
+        xp = [in_supply, out_supply]
+        # d = self._calculate_d(in_supply, out_supply)
+        # print('D_org: ', d)
+        y = self._calculate_Y(x, in_supply, out_supply, tokenIndexFrom, tokenIndexTo)
+        # print('y: ', y)
+        y_out = (xp[tokenIndexTo] - y)
 
-        # with fees
-        factor = self.scale - self.fee
-        out_amt = (in_amount * factor * out_supply) / (
-            (in_supply * self.scale) + (in_amount * factor)
-        )
-
+        print('Y final: ', y_out)
+        fee = self.fee / self.scale
+        print('fee: ', fee)
+        y_fee = y_out * fee
+        out_amt = y_out - y_fee
+        print ('out_amt: ', out_amt)
+        if (out_amt < 0):
+            return y_out
+        print('in: ', in_amount, 'X: ', in_supply, 'Y: ', out_supply, 'out: ', out_amt)
         return int(out_amt)
+    
+    def _calculate_d(self, in_supply, out_supply):
+        A = self._A * self.A_PRECISION
+        xp = [in_supply, out_supply]
+        nT = len(xp)
+        s = 0
+        for i in range(nT):
+            s = s + xp[i]
+        if s == 0:
+            return 0
+
+        prevD = 0
+        d = s
+        nA = A * nT
+
+        for i in range(255):
+            dp = d
+            for j in range (nT):
+                dp = ((dp * d) / (xp[j] * nT + 1))
+
+            prevD = d
+            d = ((
+                (((nA * s) / self.A_PRECISION) + (dp * nT)) * d
+                ) / (
+                (((nA - self.A_PRECISION) * d) / self.A_PRECISION) + ((nT + 1) * dp)
+                ))        
+            if (self._within1(d, prevD)):
+                return d
+        return 0
+    
+    def _calculate_Y (self, x, in_supply, out_supply, tokenIndexFrom = 0, tokenIndexTo = 1):
+        print('AT Y calc ---- in: ', x, 'X: ', in_supply, 'Y: ', out_supply)
+        A = self._A * self.A_PRECISION
+        xp = [in_supply, out_supply]
+        nT = len(xp)
+        d = self._calculate_d(in_supply, out_supply)
+        print('D: ', d)
+        c = d
+        s = 0
+        nA = nT * A
+        _x = 0
+
+        for i in range(nT):
+            if (i == tokenIndexFrom):
+                _x = x
+            elif (i != tokenIndexTo):
+                _x = xp[i]
+            else:
+                continue
+            s = s + _x
+            c = (c * d) / (_x * nT + 1)
+
+        z = in_supply * out_supply
+        c = ((c * d) * self.A_PRECISION) / (nA * nT)
+        b = s + ((d * self.A_PRECISION) / nA)
+        yPrev = 0
+        y = d
+    
+        for i in range(255):
+            yPrev = y
+            y = ((y * y) + c) / (((y * 2) + b) - d)
+            if (self._within1(y, yPrev)):
+                return y
+        return 0
+    
+    def _within1 (self, a, b):
+        return self._difference(a, b) <= 1
+    
+    def _difference (self, a, b):
+        if (a > b):
+            return a - b
+        return b - a
+    
+    def _calculate_chi_factor(self, in_supply, out_supply):
+        return (self.a_coef * (in_supply * out_supply)) / (
+            (self._calculate_d(in_supply, out_supply) / 2) ** 2
+        )
 
     def scaled_ratio(self) -> int:
         return int(self.ratio() * self.scale)
@@ -111,12 +197,15 @@ class ConstantProductInvariant:
 class Simulator:
     def __init__(self):
         self.cpi = ConstantProductInvariant(
-            a_supply=int(3e7),
+            a_supply=int(1e6),
             b_supply=int(1e6),
             max_pool_supply=int(1e9),
             pool_supply=int(1e9) - 100000,
             scale=1000,
             fee=3,
+            _A = 10,
+            A_PRECISION = 100,
+            # xp = [self.a_supply, self.b_supply
         )
 
         self.states = []
