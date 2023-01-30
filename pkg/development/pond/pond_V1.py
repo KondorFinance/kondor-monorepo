@@ -2,10 +2,10 @@ from typing import Final
 from pyteal import *
 from beaker import *
 
-from .utils.errors import PondErrors
-from .utils.transactions import Transactions
-from .utils.mathemagic import Mathemagic
-from .utils.helpers import Helpers
+from utils.errors import PondErrors
+from utils.transactions import Transactions
+from utils.mathemagic import Mathemagic
+from utils.helpers import Helpers
 
 class Pond(Application):
 
@@ -115,7 +115,7 @@ class Pond(Application):
         ]
 
         return Seq(
-            *Helpers.commented_assert(well_formed_bootstrap),
+            *Helpers.commented_assert(Txn, well_formed_bootstrap),
             self.asset_a.set(a_asset.asset_id()),
             self.asset_b.set(b_asset.asset_id()),
             self.pond_token.set(
@@ -203,6 +203,7 @@ class Pond(Application):
         return Seq(
             # Check that the transaction is constructed correctly
             *Helpers.commented_assert(
+                Txn,
                 well_formed_mint + valid_asset_a_xfer + valid_asset_b_xfer
             ),
             # Check that we have these data to calculate pond token amt out
@@ -301,7 +302,7 @@ class Pond(Application):
         ]
 
         return Seq(
-            *Helpers.commented_assert(well_formed_burn + valid_pool_xfer),
+            *Helpers.commented_assert(Txn, well_formed_burn + valid_pool_xfer),
             pool_bal := pool_asset.holding(self.address).balance(),
             a_bal := a_asset.holding(self.address).balance(),
             b_bal := b_asset.holding(self.address).balance(),
@@ -397,7 +398,7 @@ class Pond(Application):
         in_id = swap_xfer.get().xfer_asset()
 
         return Seq(
-            *Helpers.commented_assert(well_formed_swap + valid_swap_xfer),
+            *Helpers.commented_assert(Txn, well_formed_swap + valid_swap_xfer),
             in_sup := AssetHolding.balance(self.address, in_id),
             out_sup := AssetHolding.balance(self.address, out_id),
             Assert(

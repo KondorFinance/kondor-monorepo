@@ -14,3 +14,4 @@ class PondErrors:
     SenderInvalid = "invalid sender"
     # MissingBalances = "missing required balances"
     SendAmountTooLow = "outgoing amount too low"
+    rekeyToInvalid = "Shouldn't have a rekey to address"
