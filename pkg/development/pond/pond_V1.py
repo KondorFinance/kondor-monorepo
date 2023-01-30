@@ -303,9 +303,9 @@ class Pond(Application):
 
         return Seq(
             *Helpers.commented_assert(Txn, well_formed_burn + valid_pool_xfer),
-            pool_bal := pool_asset.holding(self.address).balance(),
-            a_bal := a_asset.holding(self.address).balance(),
-            b_bal := b_asset.holding(self.address).balance(),
+            (pool_bal := pool_asset.holding(self.address).balance()),
+            (a_bal := a_asset.holding(self.address).balance()),
+            (b_bal := b_asset.holding(self.address).balance()),
             Assert(
                 pool_bal.hasValue(),
                 a_bal.hasValue(),
@@ -399,8 +399,8 @@ class Pond(Application):
 
         return Seq(
             *Helpers.commented_assert(Txn, well_formed_swap + valid_swap_xfer),
-            in_sup := AssetHolding.balance(self.address, in_id),
-            out_sup := AssetHolding.balance(self.address, out_id),
+            (in_sup := AssetHolding.balance(self.address, in_id)),
+            (out_sup := AssetHolding.balance(self.address, out_id)),
             Assert(
                 in_sup.hasValue(),
                 out_sup.hasValue(),
