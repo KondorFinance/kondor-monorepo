@@ -1,4 +1,4 @@
-from algosdk.future import transaction
+from algosdk import transaction
 from algosdk.atomic_transaction_composer import (
     AtomicTransactionComposer,
     TransactionWithSigner,
@@ -29,7 +29,7 @@ def demo():
 
     # Create an Application client containing both an algod client and app
     app_client = client.ApplicationClient(
-        client=algod_client, app=Pond(version=6), signer=acct.signer
+        client=algod_client, app=Pond(version=8), signer=acct.signer
     )
 
     # Create the application on chain, set the app id for the app client
@@ -46,11 +46,12 @@ def demo():
     # Call app to create pond token
     print("Calling bootstrap")
     sp = algod_client.suggested_params()
+    sp.flat_fee = True
+    sp.fee = consts.milli_algo * 5
     ptxn = TransactionWithSigner(
         txn=transaction.PaymentTxn(addr, sp, app_addr, int(1e7)), signer=signer
     )
-    sp.flat_fee = True
-    sp.fee = consts.milli_algo * 5
+    sp.fee = consts.milli_algo
     result = app_client.call(
         Pond.bootstrap,
         seed=ptxn,

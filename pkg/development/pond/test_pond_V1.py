@@ -11,14 +11,14 @@ from algosdk.atomic_transaction_composer import (
     AccountTransactionSigner,
     abi,
 )
-from algosdk.future import transaction
+from algosdk import transaction
 from algosdk.v2client.algod import AlgodClient
 from algosdk.encoding import decode_address
 from beaker import client, sandbox, testing, consts, decorators
 from beaker.client.application_client import ApplicationClient, ProgramAssertion
 from beaker.client.logic_error import LogicException
 
-from .pond_V1 import Pond
+from pond_V1 import Pond
 
 accts = sandbox.get_accounts()
 algod_client: AlgodClient = sandbox.get_algod_client()
