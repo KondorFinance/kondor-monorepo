@@ -22,3 +22,15 @@ class Transactions:
                 }),
             InnerTxn.created_asset_id(),
         )
+        
+    @internal(TealType.none)
+    def do_axfer(self, rx, aid, amt):
+        return InnerTxnBuilder.Execute(
+            {
+                TxnField.type_enum: TxnType.AssetTransfer,
+                TxnField.xfer_asset: aid,
+                TxnField.asset_amount: amt,
+                TxnField.asset_receiver: rx,
+                TxnField.fee: Int(0),
+            }
+        )

@@ -24,28 +24,46 @@ class InvestmentProduct(Application):
         return self.initialize_application_state()
 
 
-    # Fund the contract with some algos
+    # This method is used to create a NFT
+    # Only the account set in app_state.governor may call this method
     @external(authorize=Authorize.only(governor))
-    def fund(self, ptxn: abi.PaymentTransaction):
+    def create_nft(self, seed: abi.PaymentTransaction, *, output: abi.Uint64):
 
         well_formed_fund = [
             (
-                ptxn.get().receiver() == self.address,
+                seed.get().receiver() == self.address,
                 InvestmentProductErrors.ReceiverNotAppAddr,
             ),
             (
-                ptxn.get().amount() >= consts.Algos(0.3),
+                seed.get().amount() >= consts.Algos(0.1),
                 InvestmentProductErrors.AmountLessThanMinimum,
             )]
 
         return Seq(
-            *Helpers.commented_assert(Txn, well_formed_fund)
+            *Helpers.commented_assert(Txn, well_formed_fund),
+            output.set(Transactions.do_create_nft(self))
         )
 
     # Only the account set in app_state.governor may call this method
-    # This method is used to create a new NFT and send it to account
+    # This method is used to send a NFT to caller's account
     @external(authorize=Authorize.only(governor))
-    def createNft(self,*, output: abi.Uint64):
-        return output.set(Transactions.do_create_nft(self))
+    def mint_nft(
+        self, 
+        seed: abi.PaymentTransaction, 
+        asset: abi.Asset
+        ):
+        well_formed_mint_nft = [
+            (
+                seed.get().receiver() == self.address,
+                InvestmentProductErrors.ReceiverNotAppAddr,
+            ),
+            (
+                seed.get().amount() >= consts.Algos(0.1),
+                InvestmentProductErrors.AmountLessThanMinimum,
+            )]
 
+        return Seq(
+            *Helpers.commented_assert(Txn, well_formed_mint_nft),
+            Transactions.do_axfer(self, seed.get().sender(), asset.asset_id(), Int(1))
+        )
 

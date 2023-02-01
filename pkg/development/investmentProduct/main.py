@@ -1,6 +1,7 @@
 from algosdk import transaction
 from algosdk.atomic_transaction_composer import (
     TransactionWithSigner,
+    AtomicTransactionComposer
 )
 from beaker import *
 
@@ -15,6 +16,9 @@ def demo():
     acct = sandbox.get_accounts().pop()
     addr, sk, signer = acct.address, acct.private_key, acct.signer
 
+    print(f"Creator: {addr}")
+
+
     # Create an Application client containing both an algod client and app
     app_client = client.ApplicationClient(
         client=algod_client, app=InvestmentProduct(version=8), signer=acct.signer
@@ -25,28 +29,56 @@ def demo():
     print(f"Created App with id: {app_id} and address addr: {app_addr} in tx: {txid}")
 
     # Call app to fund app address
-    print("Calling fund")
+    print("Calling create nft")
     sp = algod_client.suggested_params()
     sp.flat_fee = True
-    sp.fee = consts.milli_algo * 5
+    sp.fee = consts.milli_algo 
     ptxn = TransactionWithSigner(
         txn=transaction.PaymentTxn(addr, sp, app_addr, int(1e7)), signer=signer
     )
-    sp.fee = consts.milli_algo * 3
+    sp.fee = consts.milli_algo * 2
     result = app_client.call(
-        InvestmentProduct.fund,
-        ptxn=ptxn,
-        suggested_params=sp,
-    )
-    print(f"App address funded with 1e7 microalgos")
-
-    result = app_client.call(
-        InvestmentProduct.createNft,
+        InvestmentProduct.create_nft,
+        seed=ptxn,
         suggested_params=sp,
     )
     nft = result.return_value
     print(f"Created nft with id: {nft}")
-    
+
+    # Call app to mint nft
+    print("Calling mint nft")
+    sp.fee = consts.milli_algo 
+    ptxn = TransactionWithSigner(
+        txn=transaction.PaymentTxn(addr, sp, app_addr, int(1e7)), signer=signer
+    )
+
+
+    # Opt in to asset
+    atc = AtomicTransactionComposer()
+    atc.add_transaction(
+        TransactionWithSigner(
+            txn=transaction.AssetTransferTxn(addr, sp, addr, 0, nft),
+            signer=signer,
+        )
+    )
+    atc.execute(algod_client, 2)
+
+
+    # App call to mint nft
+    sp.fee = consts.milli_algo * 2
+    result = app_client.call(
+        InvestmentProduct.mint_nft,
+        seed=ptxn,
+        asset=nft,
+        suggested_params=sp,
+    )
+
+    print(f"Minted nft with asset_id: {nft}. Tx_id: {result.tx_id}")
+
+
+
+
+
 if __name__ == "__main__":
     InvestmentProduct().dump("artifacts")
     demo()
