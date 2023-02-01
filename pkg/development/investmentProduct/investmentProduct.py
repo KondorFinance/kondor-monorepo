@@ -18,10 +18,21 @@ class InvestmentProduct(Application):
         descr="The current governor of this contract, allowed to do admin type actions",
     )
 
+    asset_id: Final[AccountStateValue] = AccountStateValue(
+        stack_type=TealType.uint64,
+        descr="The asset id of the NFT",
+    )
+
+
     # Call this only on create
     @create
     def create(self):
         return self.initialize_application_state()
+
+    # Call this only on opt-in
+    @opt_in
+    def opt_in(self):
+        return self.initialize_account_state()
 
 
     # This method is used to create a NFT
@@ -41,7 +52,10 @@ class InvestmentProduct(Application):
 
         return Seq(
             *Helpers.commented_assert(Txn, well_formed_fund),
-            output.set(Transactions.do_create_nft(self))
+            self.asset_id[Txn.sender()].set(
+                Transactions.do_create_nft(self)
+            ),
+            output.set(self.asset_id[Txn.sender()])
         )
 
     # Only the account set in app_state.governor may call this method
@@ -66,4 +80,8 @@ class InvestmentProduct(Application):
             *Helpers.commented_assert(Txn, well_formed_mint_nft),
             Transactions.do_axfer(self, seed.get().sender(), asset.asset_id(), Int(1))
         )
+
+    @external(authorize=Authorize.only(governor), read_only=True)
+    def get_asset_id_val(self, *, output: abi.Uint64):
+        return output.set(self.asset_id[Txn.sender()])
 

@@ -28,6 +28,9 @@ def demo():
     app_id, app_addr, txid = app_client.create()
     print(f"Created App with id: {app_id} and address addr: {app_addr} in tx: {txid}")
 
+    app_client.opt_in()
+    print("Opted in")
+
     # Call app to fund app address
     print("Calling create nft")
     sp = algod_client.suggested_params()
@@ -44,6 +47,16 @@ def demo():
     )
     nft = result.return_value
     print(f"Created nft with id: {nft}")
+
+
+    # Call app to recover asset id from nft
+    print("Calling recover asset id")
+    sp.fee = consts.milli_algo
+    result = app_client.call(
+        InvestmentProduct.get_asset_id_val,
+        suggested_params=sp,
+    )
+    print(f"Recovered asset id: {result.return_value}")
 
     # Call app to mint nft
     print("Calling mint nft")
