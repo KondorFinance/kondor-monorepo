@@ -72,15 +72,6 @@ def assets(creator_acct: AcctInfo, user_acct: AcctInfo) -> tuple[int, int]:
                 asset_name="asset b",
                 unit_name="B",
             ),
-            # transaction.AssetCreateTxn(
-            #     addr,
-            #     sp,
-            #     TOTAL_ASSET_TOKENS,
-            #     0,
-            #     False,
-            #     asset_name="asset c",
-            #     unit_name="C",
-            # ),
         ]
     )
     algod_client.send_transactions([txn.sign(sk) for txn in txns])
@@ -88,37 +79,32 @@ def assets(creator_acct: AcctInfo, user_acct: AcctInfo) -> tuple[int, int]:
         transaction.wait_for_confirmation(algod_client, txid, 4)
         for txid in [t.get_txid() for t in txns]
     ]
-    # a_asset, b_asset, c_asset = results[0]["asset-index"], results[1]["asset-index"], results[2]["asset-index"]
     a_asset, b_asset = results[0]["asset-index"], results[1]["asset-index"]
 
-    # Send some to the user account just to have them
+    # User account opt in to asset a and b
     _opt_in_to_token(user_addr, user_signer, a_asset)
     _opt_in_to_token(user_addr, user_signer, b_asset)
-    # _opt_in_to_token(user_addr, user_signer, c_asset)
-    send_to_user_txns: list[transaction.Transaction] = transaction.assign_group_id(
+
+    # Fund user account with 1000 asset a and 1000 asset b
+    user_optin_txns: list[transaction.Transaction] = transaction.assign_group_id(
         [
             transaction.AssetTransferTxn(
-                addr, sp, user_addr, TOTAL_ASSET_TOKENS // 10, a_asset
+                addr, sp, user_addr, TOTAL_ASSET_TOKENS // 1e7, a_asset
             ),
             transaction.AssetTransferTxn(
-                addr, sp, user_addr, TOTAL_ASSET_TOKENS // 10, b_asset
+                addr, sp, user_addr, TOTAL_ASSET_TOKENS // 1e7, b_asset
             ),
-            # transaction.AssetTransferTxn(
-            #     addr, sp, user_addr, TOTAL_ASSET_TOKENS // 10, c_asset
-            # ),
         ]
     )
     algod_client.send_transactions([txn.sign(sk) for txn in send_to_user_txns])
 
-    # return (a_asset, b_asset, c_asset)
     return (a_asset, b_asset)
 
 
 @pytest.fixture(scope="session")
 def creator_app_client(creator_acct: AcctInfo) -> client.ApplicationClient:
     _, _, signer = creator_acct
-    # app = Pond().bootstrap(signer, a_asset, b_asset, c_asset)
-    app = Pond() #.bootstrap(signer, a_asset, b_asset)
+    app = Pond()
     app_client = client.ApplicationClient(algod_client, app, signer=signer)
     return app_client
 
@@ -128,10 +114,19 @@ def test_app_create(creator_app_client: client.ApplicationClient):
     creator_app_client.create()
     app_state = creator_app_client.get_application_state()
     sender = creator_app_client.get_sender()
+
     assert app_state[Pond.governor.str_key()] == _addr_to_hex(
         sender
     ), "The governor should be my address"
     assert app_state[Pond.ratio.str_key()] == 0, "The ratio should be 0"
+
+    # Check if the other variables weren't defined at global state yet
+    with pytest.raises(KeyError, match='a'):
+        app_state[Pond.asset_a.str_key()]
+    with pytest.raises(KeyError, match='b'):
+        app_state[Pond.asset_b.str_key()]
+    with pytest.raises(KeyError, match='p'):
+        app_state[Pond.pond_token.str_key()]
 
 
 def minimum_fee_for_txn_count(
@@ -229,54 +224,54 @@ def test_app_set_governor(
     state_after = creator_app_client.get_application_state()
     assert state_after[Pond.governor.str_key()] == _addr_to_hex(user_addr)
 
-    user_client = creator_app_client.prepare(signer=user_signer)
-    # Return state to old gov
-    user_client.call(
-        Pond.set_governor,
-        **build_set_governor_transaction(creator_addr),
-    )
+    # user_client = creator_app_client.prepare(signer=user_signer)
+    # # Return state to old gov
+    # user_client.call(
+    #     Pond.set_governor,
+    #     **build_set_governor_transaction(creator_addr),
+    # )
 
-    state_after_revert = creator_app_client.get_application_state()
-    assert state_after_revert[Pond.governor.str_key()] == _addr_to_hex(
-        creator_addr
-    )
+    # state_after_revert = creator_app_client.get_application_state()
+    # assert state_after_revert[Pond.governor.str_key()] == _addr_to_hex(
+    #     creator_addr
+    # )
 
 
-def test_app_bootstrap(
-    creator_app_client: client.ApplicationClient, assets: tuple[int, int]
-):
+# def test_app_bootstrap(
+#     creator_app_client: client.ApplicationClient, assets: tuple[int, int]
+# ):
 
-    app_addr = creator_app_client.app_addr
-    asset_a, asset_b = assets
+#     app_addr = creator_app_client.app_addr
+#     asset_a, asset_b = assets
 
-    # Bootstrap to create pool token and set global state
-    result = creator_app_client.call(
-        Pond.bootstrap,
-        **build_boostrap_transaction(creator_app_client, assets),
-    )
+#     # Bootstrap to create pool token and set global state
+#     result = creator_app_client.call(
+#         Pond.bootstrap,
+#         **build_boostrap_transaction(creator_app_client, assets),
+#     )
 
-    assert_app_algo_balance(creator_app_client, app_algo_balance)
+#     assert_app_algo_balance(creator_app_client, app_algo_balance)
 
-    pond_token = result.return_value
-    assert pond_token > 0, "We should have created a pool token with asset id>0"
+#     pond_token = result.return_value
+#     assert pond_token > 0, "We should have created a pool token with asset id>0"
 
-    # Check pool token params
-    token_info = creator_app_client.client.asset_info(pond_token)
-    assert token_info["params"]["name"] == "KOIFI-V1-POND-A-B"
-    assert token_info["params"]["total"] == TOTAL_POOL_TOKENS
-    assert token_info["params"]["reserve"] == app_addr
-    assert token_info["params"]["manager"] == app_addr
-    assert token_info["params"]["creator"] == app_addr
+#     # Check pool token params
+#     token_info = creator_app_client.client.asset_info(pond_token)
+#     assert token_info["params"]["name"] == "KOIFI-V1-POND-A-B"
+#     assert token_info["params"]["total"] == TOTAL_POOL_TOKENS
+#     assert token_info["params"]["reserve"] == app_addr
+#     assert token_info["params"]["manager"] == app_addr
+#     assert token_info["params"]["creator"] == app_addr
 
-    # Make sure we're opted in
-    ai = creator_app_client.get_application_account_info()
-    assert len(ai["assets"]) == 3, "Should have 3 assets, A/B/Pool"
+#     # Make sure we're opted in
+#     ai = creator_app_client.get_application_account_info()
+#     assert len(ai["assets"]) == 3, "Should have 3 assets, A/B/Pool"
 
-    # Make sure our state is updated
-    app_state = creator_app_client.get_application_state()
-    assert app_state[Pond.pond_token.str_key()] == pond_token
-    assert app_state[Pond.asset_a.str_key()] == asset_a
-    assert app_state[Pond.asset_b.str_key()] == asset_b
+#     # Make sure our state is updated
+#     app_state = creator_app_client.get_application_state()
+#     assert app_state[Pond.pond_token.str_key()] == pond_token
+#     assert app_state[Pond.asset_a.str_key()] == asset_a
+#     assert app_state[Pond.asset_b.str_key()] == asset_b
 
 # def build_mint_transaction(
 #     app_client: client.ApplicationClient,

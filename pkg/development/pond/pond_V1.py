@@ -105,7 +105,7 @@ class Pond(Application):
                 PondErrors.ReceiverNotAppAddr,
             ),
             (
-                seed.get().amount() >= consts.Algos(0.3),
+                seed.get().amount() >= consts.Algos(0.4),
                 PondErrors.AmountLessThanMinimum,
             ),
             (

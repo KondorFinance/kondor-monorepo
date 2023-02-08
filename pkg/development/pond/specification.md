@@ -16,6 +16,18 @@ Basic checks:
 
 1. `rekey to`, `close remainder to`, `asset close to` addresses are not found in the transactions.
 
+Create
+
+Description: Deploys the app and initializes state.
+
+1. Sender address == governor at global state
+2. Ratio == 0 at global state
+3. Prevent asset_a, asset_b and pond_token to be defined at global state on creation
+
+Set Governor
+
+1. Contract creator function
+
 Bootstrap
 
 Group:
@@ -25,11 +37,15 @@ Group:
 
 Description: Bootstraps the contract by opting into the assets and creating the pond token.
 
-1. Contract creator function
-2. Prevent from calling more than once
-3. Perform LP asset creation
-4. Opt In asset A
-5. Opt In asset B
+0. Basic checks [ ]
+1. Contract creator function [x]
+2. Prevent from calling more than once [ ]
+3. Amout from seed txn covers fees (outter + inner txns) [ ]
+4. Seed amount funds app with minimum [ ]
+5. Assets are not equal [x]
+6. Perform LP asset creation [ ]
+7. Opt In asset A [ ]
+8. Opt In asset B [ ]
 
 Mint
 
